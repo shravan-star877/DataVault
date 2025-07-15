@@ -1,0 +1,96 @@
+// app/page.tsx
+'use client';
+import { useState } from 'react';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { getStorage, ref, uploadBytes } from 'firebase/storage';
+import CryptoJS from 'crypto-js';
+
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const storage = getStorage(app);
+
+// Encryption helper
+const encryptFile = (file: File) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const encrypted = CryptoJS.AES.encrypt(
+        e.target?.result as string,
+        'secret-key-123'
+      ).toString();
+      resolve(new Blob([encrypted], { type: file.type }));
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+export default function DataVault() {
+  const [user, setUser] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    setUser(result.user);
+  };
+
+  const handleUpload = async () => {
+    if (!file || !user) return;
+    
+    try {
+      const encryptedFile = await encryptFile(file);
+      const storageRef = ref(storage, users/${user.uid}/${file.name});
+      await uploadBytes(storageRef, encryptedFile);
+      alert('File secured successfully!');
+    } catch (error) {
+      console.error('Upload failed:', error);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <button 
+          onClick={handleLogin}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md"
+        >
+          Login with Google
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <h1 className="text-2xl font-bold mb-6">Welcome, {user.displayName}!</h1>
+      
+      <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold mb-4">Secure File Upload</h2>
+        
+        <input
+          type="file"
+          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          className="mb-4"
+        />
+        
+        <button
+          onClick={handleUpload}
+          disabled={!file}
+          className={px-4 py-2 rounded-md text-white ${file ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 cursor-not-allowed'}}
+        >
+          Encrypt & Upload
+        </button>
+      </div>
+    </div>
+  );
+}
